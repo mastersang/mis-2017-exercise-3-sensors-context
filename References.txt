@@ -4,3 +4,9 @@
 4. Absolute value of complex number: https://www2.clarku.edu/~djoyce/complex/abs.html
 5. How to use seekbar: https://examples.javacodegeeks.com/android/core/widget/seekbar/android-seekbar-example/
 6. Changing step values of a seekbar: http://stackoverflow.com/questions/7329166/changing-step-values-in-seekbar
+7. Get list of songs in Media Store: http://www.androidsnippets.com/list-all-music-files.html
+8. Programmatically add elements to a layout: http://stackoverflow.com/questions/4203506/how-can-i-add-a-textview-to-a-linearlayout-dynamically-in-android
+9. Generate unique ID for element: http://stackoverflow.com/questions/1714297/android-view-setidint-id-programmatically-how-to-avoid-id-conflicts
+10. How to use RadioGroup: http://stackoverflow.com/questions/8323778/how-to-set-on-click-listener-on-the-radio-button-in-android
+11. Playing song with ID: http://stackoverflow.com/questions/11055318/android-not-playing-song-when-a-uri-is-set-as-datasource
+12. Getting current location: http://stackoverflow.com/questions/17591147/how-to-get-current-location-in-android

@@ -1,23 +1,39 @@
 package buw.sensors_and_context;
 
+import android.Manifest;
+import android.content.ContentUris;
 import android.content.Context;
 import android.content.SharedPreferences;
+import android.content.pm.PackageManager;
+import android.database.Cursor;
 import android.graphics.Color;
 import android.hardware.Sensor;
 import android.hardware.SensorEvent;
 import android.hardware.SensorEventListener;
 import android.hardware.SensorManager;
+import android.location.Location;
+import android.location.LocationListener;
+import android.media.AudioManager;
+import android.media.MediaPlayer;
+import android.net.Uri;
+import android.os.Bundle;
+import android.provider.MediaStore;
+import android.support.annotation.IdRes;
+import android.support.v4.app.ActivityCompat;
 import android.support.v4.content.ContextCompat;
 import android.support.v7.app.AppCompatActivity;
-import android.os.Bundle;
-import android.support.v7.widget.LinearLayoutCompat;
 import android.text.TextUtils;
 import android.util.Log;
+import android.view.LayoutInflater;
 import android.view.View;
+import android.view.ViewGroup;
 import android.widget.Button;
 import android.widget.LinearLayout;
+import android.widget.RadioButton;
+import android.widget.RadioGroup;
 import android.widget.SeekBar;
 import android.widget.TextView;
+import android.widget.Toast;
 
 import com.github.mikephil.charting.charts.LineChart;
 import com.github.mikephil.charting.components.AxisBase;
@@ -36,38 +52,65 @@ import java.util.ArrayList;
 import java.util.List;
 
 public class MainActivity extends AppCompatActivity implements SensorEventListener, SeekBar.OnSeekBarChangeListener,
-        IAxisValueFormatter, View.OnClickListener {
+        IAxisValueFormatter, View.OnClickListener, RadioGroup.OnCheckedChangeListener, LocationListener {
     private static int MAX_DATA_COUNT = 10;
     private static String SETTING = "SETTING";
+    private static String SELECT_JOGGING_SONG = "SELECT JOGGING SONG";
 
     private SensorManager objSensorManager;
     private long lngLastTime = System.currentTimeMillis();
     private int intEntryCount = 0;
+    private int intCurrentSongIndex = 0;
+    private double dblCurrentXSpeed = 0;
+    private double dblCurrentYSpeed = 0;
+    private double dblCurrentZSpeed = 0;
+    private double dblCurrentAccelerometerSpeed = 0;
+    private double dblCurrentLocationSpeed = -1;
     private List<Entry> lstX = new ArrayList<>();
     private List<Entry> lstY = new ArrayList<>();
     private List<Entry> lstZ = new ArrayList<>();
     private List<Entry> lstMagnitude = new ArrayList<>();
     private List<Entry> lstAllMagnitude = new ArrayList<>();
+    private List<Song> lstSong;
     private Setting objSetting;
+    private Song objJoggingSong;
+    private Song objBikingSong;
+    private Song objCurrentSong;
+    private MediaPlayer objMediaPlayer;
+    private boolean bolSelectedSongs = false;
 
-    @Override
-    protected void onCreate(Bundle savedInstanceState) {
-        super.onCreate(savedInstanceState);
-        setContentView(R.layout.activity_main);
+    // Toast wrapper
+    private void showToast(final String strMessage) {
+        Toast objToast = Toast.makeText(this, strMessage, Toast.LENGTH_SHORT);
+        objToast.show();
+    }
 
-        try {
-            // Initialise settings
-            initialiseSetting();
+    //region Initialise
 
-            // Initialise sensor
-            objSensorManager = (SensorManager) getSystemService(Context.SENSOR_SERVICE);
-            Sensor objSensor = objSensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER);
-            objSensorManager.registerListener(this, objSensor, SensorManager.SENSOR_DELAY_NORMAL);
+    private void initialise() {
+        initialisePermissions();
+        initialiseTabButtons();
+        initialiseSetting();
+        initialiseSensor();
+        initialiseSeekBars();
+        initialiseChart();
+        initialiseSongList();
+    }
 
-            initialiseSeekBars();
-            initialiseChart();
-        } catch (Exception ex) {
-            Log.e("onCreate", "Exception", ex);
+    private void initialisePermissions() {
+        if (ContextCompat.checkSelfPermission(this.getApplicationContext(),
+                android.Manifest.permission.READ_EXTERNAL_STORAGE) != PackageManager.PERMISSION_GRANTED) {
+            ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.READ_EXTERNAL_STORAGE}, 1306);
+        }
+
+        if (ContextCompat.checkSelfPermission(this.getApplicationContext(),
+                android.Manifest.permission.ACCESS_COARSE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
+            ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.ACCESS_COARSE_LOCATION}, 1992);
+        }
+
+        if (ContextCompat.checkSelfPermission(this.getApplicationContext(),
+                Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
+            ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.ACCESS_FINE_LOCATION}, 3979);
         }
     }
 
@@ -76,11 +119,12 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
         initialiseButton(btnSensor);
         Button btnMusic = (Button) findViewById(R.id.btnMusic);
         initialiseButton(btnMusic);
+        onClick(btnSensor);
     }
 
-    // Wrapper
     private void initialiseButton(Button btn) {
-        btn.setBackground((ContextCompat.getDrawable(this, R.color.colorTab)));
+        btn.setBackgroundColor(Color.BLUE);
+        //   btn.setBackground((ContextCompat.getDrawable(this, R.color.colorTab)));
         btn.setTextColor(Color.WHITE);
     }
 
@@ -97,6 +141,12 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
         }
     }
 
+    private void initialiseSensor() {
+        objSensorManager = (SensorManager) getSystemService(Context.SENSOR_SERVICE);
+        Sensor objSensor = objSensorManager.getDefaultSensor(Sensor.TYPE_LINEAR_ACCELERATION);
+        objSensorManager.registerListener(this, objSensor, SensorManager.SENSOR_DELAY_NORMAL);
+    }
+
     private void initialiseSeekBars() {
         SeekBar skbSampleRate = (SeekBar) findViewById(R.id.skbSampleRate);
         skbSampleRate.setProgress(objSetting.SampleRate);
@@ -107,46 +157,6 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
         skbSampleRate.setOnSeekBarChangeListener(this);
         skbWindowSize.setOnSeekBarChangeListener(this);
         updateSeekBar();
-    }
-
-    @Override
-    public void onSensorChanged(SensorEvent event) {
-        try {
-            Sensor objSensor = event.sensor;
-
-            if (objSensor.getType() == Sensor.TYPE_ACCELEROMETER) {
-                long lngNow = System.currentTimeMillis();
-
-                // Only add new point to graph if time has passed the update interval
-                if ((lngNow - lngLastTime) > 1000 / objSetting.SampleRate) {
-                    // Get x, y, z and calculate magnitude, then add each of them to their respective entry list
-                    ++intEntryCount;
-                    lngLastTime = lngNow;
-                    float x = event.values[0];
-                    addDataToList(lstX, x);
-                    float y = event.values[1];
-                    addDataToList(lstY, y);
-                    float z = event.values[2];
-                    addDataToList(lstZ, z);
-                    float magnitude = (float) Math.sqrt(Math.pow(x, 2) + Math.pow(y, 2) + Math.pow(z, 2));
-                    addDataToList(lstMagnitude, magnitude);
-                    lstAllMagnitude.add(new Entry(lstAllMagnitude.size(), magnitude));
-                    updateChart();
-                }
-            }
-        } catch (Exception ex) {
-            Log.e("onSensorChanged", "Exception", ex);
-        }
-    }
-
-    // Wrap adding data to entry list
-    private void addDataToList(List<Entry> lstEntry, float fltValue) {
-        // Only keep the latest entries in the chart
-        if (lstEntry.size() == MAX_DATA_COUNT) {
-            lstEntry.remove(0);
-        }
-
-        lstEntry.add(new Entry(intEntryCount, fltValue));
     }
 
     //region Initialise chart
@@ -211,6 +221,283 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
 
     // endregion
 
+    //region Initialise song list
+
+    private void initialiseSongList() {
+        RadioGroup rdgSongList = (RadioGroup) findViewById(R.id.rdgSongList);
+        rdgSongList.setOnCheckedChangeListener(this);
+        getSongs();
+
+        for (int i = 0; i < lstSong.size(); ++i) {
+            Song objSong = lstSong.get(i);
+            int intID = View.generateViewId();
+            LayoutInflater objLayoutInflater = (LayoutInflater) getApplicationContext().getSystemService(Context.LAYOUT_INFLATER_SERVICE);
+            View objView = objLayoutInflater.inflate(R.layout.song_list_item, null);
+            objSong.RadioButtonID = intID;
+            RadioButton rdbSelect = (RadioButton) objView.findViewById(R.id.rdbSelect);
+            rdbSelect.setId(intID);
+            rdbSelect.setText(objSong.SongName);
+            ViewGroup objViewGroup = (ViewGroup) findViewById(R.id.rdgSongList);
+            objViewGroup.addView(objView, i, new LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT));
+        }
+    }
+
+    private void getSongs() {
+        Cursor cursor = getCursor();
+        lstSong = new ArrayList<>();
+
+        try {
+            while (cursor.moveToNext()) {
+                Song objSong = new Song();
+                objSong.SongName = cursor.getString(2);
+                objSong.ID = cursor.getInt(0);
+                lstSong.add(objSong);
+            }
+        } catch (Exception ex) {
+            Log.e("getSongs", "Exception", ex);
+        } finally {
+            cursor.close();
+        }
+    }
+
+    private Cursor getCursor() {
+        String[] arrProjection = getProjection();
+        String strSelection = MediaStore.Audio.Media.IS_MUSIC + " != 0";
+
+        Cursor objCursor = getContentResolver().query(MediaStore.Audio.Media.EXTERNAL_CONTENT_URI,
+                arrProjection,
+                strSelection,
+                null,
+                null);
+
+        return objCursor;
+    }
+
+    private String[] getProjection() {
+        String[] arrProjection = {
+                MediaStore.Audio.Media._ID,
+                MediaStore.Audio.Media.ARTIST,
+                MediaStore.Audio.Media.TITLE,
+                MediaStore.Audio.Media.DATA,
+                MediaStore.Audio.Media.DISPLAY_NAME,
+                MediaStore.Audio.Media.DURATION
+        };
+
+        return arrProjection;
+    }
+
+    //endregion
+
+    //end region
+
+    //region Seekbars
+
+    private void updateSeekBar() {
+        TextView lblSampleRate = (TextView) findViewById(R.id.lblSampleRate);
+        SeekBar skbSampleRate = (SeekBar) findViewById(R.id.skbSampleRate);
+        lblSampleRate.setText("" + skbSampleRate.getProgress());
+        objSetting.SampleRate = skbSampleRate.getProgress();
+
+        TextView lblWindowSize = (TextView) findViewById(R.id.lblWindowSize);
+        SeekBar skbWindowSize = (SeekBar) findViewById(R.id.skbWindowSize);
+        lblWindowSize.setText("" + skbWindowSize.getProgress());
+        objSetting.FFTWindowSize = skbWindowSize.getProgress();
+
+        // Save setting to shared preferences to use them again at a later time
+        saveSetting();
+    }
+
+    private void saveSetting() {
+        Gson objGson = new Gson();
+        String strJSON = objGson.toJson(objSetting);
+        SharedPreferences objPreferences = getPreferences(MODE_PRIVATE);
+        SharedPreferences.Editor objEditor = objPreferences.edit();
+        objEditor.putString(SETTING, strJSON);
+        objEditor.commit();
+    }
+
+    //endregion
+
+    //region Buttons
+
+    private void greyOutButton(final View objButton) {
+        objButton.setAlpha(.5f);
+    }
+
+    private void greyInButton(final View objButton) {
+        objButton.setAlpha(1f);
+    }
+
+    private void clickButton(View v) {
+        int intID = v.getId();
+
+        if (intID == R.id.btnSelectSongs) {
+            selectSongs();
+        } else {
+            selectTab(v, intID);
+        }
+    }
+
+    private void selectTab(View v, int intID) {
+        greyInButton(v);
+        LinearLayout pnlSensor = (LinearLayout) findViewById(R.id.pnlSensor);
+        LinearLayout pnlMusic = (LinearLayout) findViewById(R.id.pnlMusic);
+        Button btnMusic = (Button) findViewById(R.id.btnMusic);
+        Button btnSensor = (Button) findViewById(R.id.btnSensor);
+
+        switch (intID) {
+            case R.id.btnSensor:
+                greyOutButton(btnMusic);
+                pnlSensor.setVisibility(View.VISIBLE);
+                pnlMusic.setVisibility(View.INVISIBLE);
+                break;
+
+            case R.id.btnMusic:
+                greyOutButton(btnSensor);
+                pnlSensor.setVisibility(View.INVISIBLE);
+                pnlMusic.setVisibility(View.VISIBLE);
+                break;
+
+            default:
+                break;
+        }
+    }
+
+    private void selectSongs() {
+        Button btnSelectSongs = (Button) findViewById(R.id.btnSelectSongs);
+
+        if (btnSelectSongs.getText().toString().equalsIgnoreCase(SELECT_JOGGING_SONG)) {
+            if (objJoggingSong == null) {
+                showToast("Please select at least 1 song!");
+            } else {
+                btnSelectSongs.setText("Select biking song");
+                RadioGroup rdgSongList = (RadioGroup) findViewById(R.id.rdgSongList);
+                rdgSongList.clearCheck();
+                objBikingSong = null;
+            }
+        } else if (objBikingSong == null) {
+            showToast("Please select at least 1 song!");
+        } else {
+            LinearLayout pnlSelectSong = (LinearLayout) findViewById(R.id.pnlSelectSong);
+            pnlSelectSong.setVisibility(View.INVISIBLE);
+            LinearLayout pnlStatus = (LinearLayout) findViewById(R.id.pnlStatus);
+            pnlStatus.setVisibility(View.VISIBLE);
+            bolSelectedSongs = true;
+        }
+    }
+
+    //endregion
+
+    //region Sensor
+
+    private void sensorChanged(SensorEvent event) {
+        long lngNow = System.currentTimeMillis();
+        long lngTimeDifference = lngNow - lngLastTime;
+
+        // Only add new point to graph if time has passed the update interval
+        if (lngTimeDifference > 1000 / objSetting.SampleRate) {
+            lngLastTime = lngNow;
+
+            if (intEntryCount > 0) {
+                calculateCurrentSpeeds(lngTimeDifference);
+                checkAndPlayMusic();
+            }
+
+            addNewEntriesToChart(event);
+        }
+    }
+
+    private void checkAndPlayMusic() {
+        // Only play music if user has selected songs
+        if (bolSelectedSongs) {
+            double dblSpeed = dblCurrentAccelerometerSpeed;
+
+            if (dblCurrentLocationSpeed != -1) {
+                dblSpeed = dblCurrentLocationSpeed;
+            }
+
+            if (dblSpeed < objSetting.JoggingSpeed) {         // Sitting or casually jogging
+                stopMusic();
+            } else if (dblSpeed < objSetting.BikingSpeed) {  // Jogging
+                if (objCurrentSong != objJoggingSong) {
+                    playSong(objJoggingSong);
+                }
+            } else if (dblSpeed < objSetting.MaxSpeed) {// Biking
+                if (objCurrentSong != objBikingSong) {
+                    playSong(objBikingSong);
+                }
+            } else {
+                stopMusic();
+            }
+        }
+    }
+
+    private void stopMusic() {
+        if (objMediaPlayer != null) {
+            objMediaPlayer.stop();
+            objMediaPlayer.release();
+            objMediaPlayer = null;
+            objCurrentSong = null;
+        }
+
+        TextView lblCurrentSong = (TextView) findViewById(R.id.lblCurrentSong);
+        lblCurrentSong.setText("Not playing any song");
+    }
+
+    private void playSong(Song objSong) {
+        stopMusic();
+        Uri objURI = ContentUris.withAppendedId(MediaStore.Audio.Media.EXTERNAL_CONTENT_URI, objSong.ID);
+        objMediaPlayer = MediaPlayer.create(this, objURI);
+        objMediaPlayer.setAudioStreamType(AudioManager.STREAM_MUSIC);
+        objMediaPlayer.setLooping(true);
+        objMediaPlayer.start();
+        TextView lblCurrentSong = (TextView) findViewById(R.id.lblCurrentSong);
+        lblCurrentSong.setText("Playing song [" + objSong.SongName + "]");
+        objCurrentSong = objSong;
+    }
+
+    private void calculateCurrentSpeeds(long lngTimeDifference) {
+        // calculate current speed using last acceleration on each axis and time passed, then apply formula v = sqrt(vx^2 + vy^2 + vz^2)
+        double dblSecond = lngTimeDifference / 1000.1;
+        dblCurrentXSpeed += lstX.get(lstX.size() - 1).getY() * dblSecond * 60 * 60 / 1000;
+        dblCurrentYSpeed += lstX.get(lstX.size() - 1).getY() * dblSecond * 60 * 60 / 1000;
+        dblCurrentZSpeed += lstX.get(lstX.size() - 1).getY() * dblSecond * 60 * 60 / 1000;
+        dblCurrentAccelerometerSpeed = Math.sqrt(
+                Math.pow(dblCurrentXSpeed, 2)
+                        + Math.pow(dblCurrentYSpeed, 2)
+                        + Math.pow(dblCurrentZSpeed, 2));
+        TextView lblCurrentSpeed = (TextView) findViewById(R.id.lblCurrentSpeed);
+        DecimalFormat decimalFormat = new DecimalFormat("#,##0.000");
+        lblCurrentSpeed.setText("Calculated speed: " + decimalFormat.format(dblCurrentAccelerometerSpeed) + " km/h\r\nLocation speed: " + dblCurrentLocationSpeed);
+    }
+
+    private void addNewEntriesToChart(SensorEvent event) {
+        // Get x, y, z and calculate magnitude, then add each of them to their respective entry list
+        ++intEntryCount;
+        float x = event.values[0];
+        addDataToList(lstX, x);
+        float y = event.values[1];
+        addDataToList(lstY, y);
+        float z = event.values[2];
+        addDataToList(lstZ, z);
+        float magnitude = (float) Math.sqrt(Math.pow(x, 2) + Math.pow(y, 2) + Math.pow(z, 2));
+        addDataToList(lstMagnitude, magnitude);
+        lstAllMagnitude.add(new Entry(lstAllMagnitude.size(), magnitude));
+        updateChart();
+    }
+
+    // Wrap adding data to entry list
+    private void addDataToList(List<Entry> lstEntry, float fltValue) {
+        // Only keep the latest entries in the chart
+        if (lstEntry.size() == MAX_DATA_COUNT) {
+            lstEntry.remove(0);
+        }
+
+        lstEntry.add(new Entry(intEntryCount, fltValue));
+    }
+
+    //region Update charts
+
     private void updateChart() {
         LineChart objChart = (LineChart) findViewById(R.id.chart);
         LineData objLineData = new LineData();
@@ -271,6 +558,37 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
         objLineData.addDataSet(objDataSet);
     }
 
+    //endregion
+
+    //endregion
+
+    //region Events
+
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        setContentView(R.layout.activity_main);
+
+        try {
+            initialise();
+        } catch (Exception ex) {
+            Log.e("onCreate", "Exception", ex);
+        }
+    }
+
+    @Override
+    public void onSensorChanged(SensorEvent event) {
+        try {
+            Sensor objSensor = event.sensor;
+
+            if (objSensor.getType() == Sensor.TYPE_LINEAR_ACCELERATION) {
+                sensorChanged(event);
+            }
+        } catch (Exception ex) {
+            Log.e("onSensorChanged", "Exception", ex);
+        }
+    }
+
     @Override
     public void onAccuracyChanged(Sensor sensor, int accuracy) {
 
@@ -306,61 +624,59 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
 
     }
 
-    private void updateSeekBar() {
-        TextView lblSampleRate = (TextView) findViewById(R.id.lblSampleRate);
-        SeekBar skbSampleRate = (SeekBar) findViewById(R.id.skbSampleRate);
-        lblSampleRate.setText("" + skbSampleRate.getProgress());
-        objSetting.SampleRate = skbSampleRate.getProgress();
-
-        TextView lblWindowSize = (TextView) findViewById(R.id.lblWindowSize);
-        SeekBar skbWindowSize = (SeekBar) findViewById(R.id.skbWindowSize);
-        lblWindowSize.setText("" + skbWindowSize.getProgress());
-        objSetting.FFTWindowSize = skbWindowSize.getProgress();
-
-        // Save setting to shared preferences to use them again at a later time
-        saveSetting();
-    }
-
-    private void saveSetting() {
-        Gson objGson = new Gson();
-        String strJSON = objGson.toJson(objSetting);
-        SharedPreferences objPreferences = getPreferences(MODE_PRIVATE);
-        SharedPreferences.Editor objEditor = objPreferences.edit();
-        objEditor.putString(SETTING, strJSON);
-        objEditor.commit();
-    }
-
     @Override
     public void onClick(View v) {
-        greyInButton(v);
-        int intID = v.getId();
-
-        switch (intID) {
-            case R.id.btnSensor:
-                Button btnMusic = (Button) findViewById(R.id.btnMusic);
-                greyOutButton(btnMusic);
-                LinearLayout pnlSensor = (LinearLayout) findViewById(R.id.pnlSensor);
-                pnlSensor.setVisibility(View.VISIBLE);
-                break;
-
-            case R.id.btnMusic:
-                Button btnSensor = (Button) findViewById(R.id.btnSensor);
-                greyOutButton(btnSensor);
-                pnlSensor = (LinearLayout) findViewById(R.id.pnlSensor);
-                pnlSensor.setVisibility(View.INVISIBLE);
-                break;
-
-            default:
-                break;
+        try {
+            clickButton(v);
+        } catch (Exception ex) {
+            Log.e("onClick", "Exception", ex);
         }
     }
 
+    @Override
+    public void onCheckedChanged(RadioGroup group, @IdRes int checkedId) {
+        try {
+            Button btnSelectSongs = (Button) findViewById(R.id.btnSelectSongs);
 
-    private void greyOutButton(final View objButton) {
-        objButton.setAlpha(.5f);
+            for (Song objSong : lstSong) {
+                if (objSong.RadioButtonID == checkedId) {
+                    if (btnSelectSongs.getText().toString().equalsIgnoreCase(SELECT_JOGGING_SONG)) {
+                        objJoggingSong = objSong;
+                    } else {
+                        objBikingSong = objSong;
+                    }
+
+                    break;
+                }
+            }
+        } catch (Exception ex) {
+            Log.e("onCheckedChanged", "Exception", ex);
+        }
     }
 
-    private void greyInButton(final View objButton) {
-        objButton.setAlpha(1f);
+    @Override
+    public void onLocationChanged(Location location) {
+        if (location.hasSpeed()) {
+            dblCurrentLocationSpeed = location.getSpeed();
+        } else {
+            dblCurrentLocationSpeed = -1;
+        }
     }
+
+    @Override
+    public void onStatusChanged(String provider, int status, Bundle extras) {
+
+    }
+
+    @Override
+    public void onProviderEnabled(String provider) {
+
+    }
+
+    @Override
+    public void onProviderDisabled(String provider) {
+
+    }
+
+    //endregion
 }

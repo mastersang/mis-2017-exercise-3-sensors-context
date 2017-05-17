@@ -4,6 +4,7 @@
     xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
+    android:padding="8dp"
     tools:context="buw.sensors_and_context.MainActivity">
 
     <TabHost
@@ -51,8 +52,7 @@
                     android:layout_width="match_parent"
                     android:layout_height="match_parent"
                     android:gravity="center_horizontal"
-                    android:orientation="vertical"
-                    android:padding="8dp">
+                    android:orientation="vertical">
 
                     <LinearLayout
                         android:layout_width="match_parent"
@@ -63,7 +63,7 @@
                             android:layout_width="120dp"
                             android:layout_height="wrap_content"
                             android:text="Sample rate (S/s):"
-                            android:textStyle="bold"/>
+                            android:textStyle="bold" />
 
                         <SeekBar
                             android:id="@+id/skbSampleRate"
@@ -89,7 +89,7 @@
                             android:layout_width="120dp"
                             android:layout_height="wrap_content"
                             android:text="Window size: "
-                            android:textStyle="bold"/>
+                            android:textStyle="bold" />
 
                         <SeekBar
                             android:id="@+id/skbWindowSize"
@@ -120,7 +120,7 @@
                                 android:layout_width="match_parent"
                                 android:layout_height="wrap_content"
                                 android:text="Accelometer data:"
-                                android:textStyle="bold"/>
+                                android:textStyle="bold" />
 
                             <com.github.mikephil.charting.charts.LineChart
                                 android:id="@+id/chart"
@@ -142,6 +142,62 @@
                                 android:layout_marginTop="4dp" />
                         </LinearLayout>
                     </ScrollView>
+                </LinearLayout>
+
+                <LinearLayout
+                    android:id="@+id/pnlMusic"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical">
+
+                    <LinearLayout
+                        android:id="@+id/pnlStatus"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="vertical"
+                        android:visibility="invisible">
+
+                        <TextView
+                            android:id="@+id/lblCurrentSpeed"
+                            android:layout_width="match_parent"
+                            android:layout_height="match_parent" />
+
+                        <TextView
+                            android:id="@+id/lblCurrentSong"
+                            android:layout_width="match_parent"
+                            android:layout_height="match_parent" />
+                    </LinearLayout>
+
+                    <LinearLayout
+                        android:id="@+id/pnlSelectSong"
+                        android:layout_width="match_parent"
+                        android:layout_height="match_parent"
+                        android:orientation="vertical">
+
+                        <TextView
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:text="Please select song"
+                            android:textStyle="bold" />
+
+                        <ScrollView
+                            android:layout_width="match_parent"
+                            android:layout_height="300dp">
+
+                            <RadioGroup
+                                android:id="@+id/rdgSongList"
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:orientation="vertical"></RadioGroup>
+                        </ScrollView>
+
+                        <Button
+                            android:id="@+id/btnSelectSongs"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:onClick="onClick"
+                            android:text="Select jogging song" />
+                    </LinearLayout>
                 </LinearLayout>
             </FrameLayout>
         </LinearLayout>
