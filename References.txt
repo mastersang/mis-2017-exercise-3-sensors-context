@@ -1,0 +1,6 @@
+1. Using accelerometer seosor: https://code.tutsplus.com/tutorials/using-the-accelerometer-on-android--mobile-22125
+2. Library for showing chart: https://github.com/PhilJay/MPAndroidChart
+3. Changing chart background color: http://stackoverflow.com/questions/26202655/how-to-change-chart-background-with-mpandroidchart-library
+4. Absolute value of complex number: https://www2.clarku.edu/~djoyce/complex/abs.html
+5. How to use seekbar: https://examples.javacodegeeks.com/android/core/widget/seekbar/android-seekbar-example/
+6. Changing step values of a seekbar: http://stackoverflow.com/questions/7329166/changing-step-values-in-seekbar
