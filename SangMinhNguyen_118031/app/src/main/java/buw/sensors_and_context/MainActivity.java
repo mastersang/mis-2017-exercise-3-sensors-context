@@ -461,18 +461,22 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
                 dblSpeed = dblCurrentLocationSpeed;
             }
 
-            if (dblSpeed < objSetting.JoggingSpeed) { // Sitting or casually jogging
+            if (dblSpeed < objSetting.JoggingSpeed || dblSpeed >= objSetting.MaxSpeed) { // Sitting or casually jogging
                 pauseMusic();
-            } else if (dblSpeed < objSetting.BikingSpeed) { // Jogging
-                if (objCurrentSong != objJoggingSong) {
-                    playSong(objJoggingSong);
-                }
-            } else if (dblSpeed < objSetting.MaxSpeed) { // Biking
-                if (objCurrentSong != objBikingSong) {
-                    playSong(objBikingSong);
-                }
             } else {
-                pauseMusic();
+                if (objMediaPlayer != null && !objMediaPlayer.isPlaying()) {
+                    objMediaPlayer.start();
+                }
+
+                if (dblSpeed < objSetting.BikingSpeed) { // Jogging
+                    if (objCurrentSong != objJoggingSong) {
+                        playSong(objJoggingSong);
+                    }
+                } else if (dblSpeed < objSetting.MaxSpeed) { // Biking
+                    if (objCurrentSong != objBikingSong) {
+                        playSong(objBikingSong);
+                    }
+                }
             }
         }
     }
