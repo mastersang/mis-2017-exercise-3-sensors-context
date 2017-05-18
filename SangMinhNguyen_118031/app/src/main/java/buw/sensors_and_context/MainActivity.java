@@ -461,23 +461,34 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
                 dblSpeed = dblCurrentLocationSpeed;
             }
 
-            if (dblSpeed < objSetting.JoggingSpeed) {         // Sitting or casually jogging
-                stopMusic();
-            } else if (dblSpeed < objSetting.BikingSpeed) {  // Jogging
+            if (dblSpeed < objSetting.JoggingSpeed) { // Sitting or casually jogging
+                pauseMusic();
+            } else if (dblSpeed < objSetting.BikingSpeed) { // Jogging
                 if (objCurrentSong != objJoggingSong) {
                     playSong(objJoggingSong);
                 }
-            } else if (dblSpeed < objSetting.MaxSpeed) {// Biking
+            } else if (dblSpeed < objSetting.MaxSpeed) { // Biking
                 if (objCurrentSong != objBikingSong) {
                     playSong(objBikingSong);
                 }
             } else {
-                stopMusic();
+                pauseMusic();
             }
         }
     }
 
-    private void stopMusic() {
+    private void pauseMusic() {
+        TextView lblCurrentSong = (TextView) findViewById(R.id.lblCurrentSong);
+
+        if (objMediaPlayer != null) {
+            objMediaPlayer.pause();
+            lblCurrentSong.setText("Pausing song [" + objCurrentSong.SongName + "]");
+        } else {
+            lblCurrentSong.setText("Not playing any song");
+        }
+    }
+
+    private void playSong(Song objSong) {
         if (objMediaPlayer != null) {
             objMediaPlayer.stop();
             objMediaPlayer.release();
@@ -485,12 +496,6 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
             objCurrentSong = null;
         }
 
-        TextView lblCurrentSong = (TextView) findViewById(R.id.lblCurrentSong);
-        lblCurrentSong.setText("Not playing any song");
-    }
-
-    private void playSong(Song objSong) {
-        stopMusic();
         Uri objURI = ContentUris.withAppendedId(MediaStore.Audio.Media.EXTERNAL_CONTENT_URI, objSong.ID);
         objMediaPlayer = MediaPlayer.create(this, objURI);
         objMediaPlayer.setAudioStreamType(AudioManager.STREAM_MUSIC);
