@@ -514,7 +514,7 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
         TextView lblCurrentSpeed = (TextView) findViewById(R.id.lblCurrentSpeed);
         DecimalFormat decimalFormat = new DecimalFormat("#,##0.000");
         lblCurrentSpeed.setText("Calculated speed: " + decimalFormat.format(dblCurrentAccelerometerSpeed) + " km/h\r\n" +
-                "Location speed: " + decimalFormat.format(dblCurrentLocationSpeed));
+                "Location speed: " + decimalFormat.format(dblCurrentLocationSpeed) + " km/h");
     }
 
     private void addNewEntriesToChart(SensorEvent event) {
