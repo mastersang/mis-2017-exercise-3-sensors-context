@@ -1,0 +1,2 @@
+The range I use for jogging speed is 5 - 10 km/h, biking speed is 11 - 100 km/h. They are both configurable in the app UI. I determined the jogging speed value from https://en.wikipedia.org/wiki/Jogging.
+However, when running the app the data seems to be heavily affected by noises such as vibrations and shaking, thus rendering the calculated speed not reliable at all. Therefore, I also use Location.getSpeed() to have another way to determine the user's current speed. If Location.getSpeed() gives a result then I use it to decide the song as it is more reliable.

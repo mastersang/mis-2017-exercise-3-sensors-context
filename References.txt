@@ -10,3 +10,4 @@
 10. How to use RadioGroup: http://stackoverflow.com/questions/8323778/how-to-set-on-click-listener-on-the-radio-button-in-android
 11. Playing song with ID: http://stackoverflow.com/questions/11055318/android-not-playing-song-when-a-uri-is-set-as-datasource
 12. Getting current location: http://stackoverflow.com/questions/17591147/how-to-get-current-location-in-android
+13. Listening to when user grants/denies permission: http://stackoverflow.com/questions/37526680/wait-for-user-permission

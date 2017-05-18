@@ -13,6 +13,7 @@ import android.hardware.SensorEventListener;
 import android.hardware.SensorManager;
 import android.location.Location;
 import android.location.LocationListener;
+import android.location.LocationManager;
 import android.media.AudioManager;
 import android.media.MediaPlayer;
 import android.net.Uri;
@@ -47,13 +48,18 @@ import com.github.mikephil.charting.data.LineDataSet;
 import com.github.mikephil.charting.formatter.IAxisValueFormatter;
 import com.google.gson.Gson;
 
+import java.security.Permission;
 import java.text.DecimalFormat;
 import java.util.ArrayList;
 import java.util.List;
 
 public class MainActivity extends AppCompatActivity implements SensorEventListener, SeekBar.OnSeekBarChangeListener,
-        IAxisValueFormatter, View.OnClickListener, RadioGroup.OnCheckedChangeListener, LocationListener {
+        IAxisValueFormatter, View.OnClickListener, RadioGroup.OnCheckedChangeListener, LocationListener,
+        ActivityCompat.OnRequestPermissionsResultCallback {
     private static int MAX_DATA_COUNT = 10;
+    private static int MIN_JOGGING_SPEED = 5;
+    private static int MIN_BIKING_SPEED = 11;
+    private static int MIN_MAX_SPEED = 41;
     private static String SETTING = "SETTING";
     private static String SELECT_JOGGING_SONG = "SELECT JOGGING SONG";
 
@@ -65,7 +71,7 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
     private double dblCurrentYSpeed = 0;
     private double dblCurrentZSpeed = 0;
     private double dblCurrentAccelerometerSpeed = 0;
-    private double dblCurrentLocationSpeed = -1;
+    private double dblCurrentLocationSpeed = 0;
     private List<Entry> lstX = new ArrayList<>();
     private List<Entry> lstY = new ArrayList<>();
     private List<Entry> lstZ = new ArrayList<>();
@@ -87,31 +93,31 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
 
     //region Initialise
 
+    private void initialisePermissions() {
+        if (!checkPermission(android.Manifest.permission.READ_EXTERNAL_STORAGE) ||
+                !checkPermission(android.Manifest.permission.ACCESS_FINE_LOCATION)) {
+            ActivityCompat.requestPermissions(this, new String[]{
+                    android.Manifest.permission.READ_EXTERNAL_STORAGE,
+                    android.Manifest.permission.ACCESS_FINE_LOCATION}, 1306);
+        } else {
+            LocationManager objLocationManager = (LocationManager) getApplicationContext().getSystemService(LOCATION_SERVICE);
+            objLocationManager.requestLocationUpdates(LocationManager.GPS_PROVIDER, 1000, 1, this);
+            initialise();
+        }
+    }
+
+    //Wrapper
+    private boolean checkPermission(String strPermission) {
+        return ContextCompat.checkSelfPermission(this.getApplicationContext(), strPermission) == PackageManager.PERMISSION_GRANTED;
+    }
+
     private void initialise() {
-        initialisePermissions();
         initialiseTabButtons();
         initialiseSetting();
         initialiseSensor();
         initialiseSeekBars();
         initialiseChart();
         initialiseSongList();
-    }
-
-    private void initialisePermissions() {
-        if (ContextCompat.checkSelfPermission(this.getApplicationContext(),
-                android.Manifest.permission.READ_EXTERNAL_STORAGE) != PackageManager.PERMISSION_GRANTED) {
-            ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.READ_EXTERNAL_STORAGE}, 1306);
-        }
-
-        if (ContextCompat.checkSelfPermission(this.getApplicationContext(),
-                android.Manifest.permission.ACCESS_COARSE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
-            ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.ACCESS_COARSE_LOCATION}, 1992);
-        }
-
-        if (ContextCompat.checkSelfPermission(this.getApplicationContext(),
-                Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
-            ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.ACCESS_FINE_LOCATION}, 3979);
-        }
     }
 
     private void initialiseTabButtons() {
@@ -124,7 +130,6 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
 
     private void initialiseButton(Button btn) {
         btn.setBackgroundColor(Color.BLUE);
-        //   btn.setBackground((ContextCompat.getDrawable(this, R.color.colorTab)));
         btn.setTextColor(Color.WHITE);
     }
 
@@ -143,20 +148,36 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
 
     private void initialiseSensor() {
         objSensorManager = (SensorManager) getSystemService(Context.SENSOR_SERVICE);
-        Sensor objSensor = objSensorManager.getDefaultSensor(Sensor.TYPE_LINEAR_ACCELERATION);
+        Sensor objSensor = objSensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER);
         objSensorManager.registerListener(this, objSensor, SensorManager.SENSOR_DELAY_NORMAL);
     }
 
     private void initialiseSeekBars() {
         SeekBar skbSampleRate = (SeekBar) findViewById(R.id.skbSampleRate);
-        skbSampleRate.setProgress(objSetting.SampleRate);
-
+        setSeekBar(skbSampleRate, objSetting.SampleRate, 0);
         SeekBar skbWindowSize = (SeekBar) findViewById(R.id.skbWindowSize);
-        skbWindowSize.setProgress(objSetting.FFTWindowSize);
-
+        setSeekBar(skbWindowSize, objSetting.FFTWindowSize, 0);
+        SeekBar skbJoggingSpeed = (SeekBar) findViewById(R.id.skbJoggingSpeed);
+        setSeekBar(skbJoggingSpeed, objSetting.JoggingSpeed - MIN_JOGGING_SPEED, 15 - MIN_JOGGING_SPEED);
+        SeekBar skbBikingSpeed = (SeekBar) findViewById(R.id.skbBikingSpeed);
+        setSeekBar(skbBikingSpeed, objSetting.BikingSpeed - MIN_BIKING_SPEED, 40 - MIN_BIKING_SPEED);
+        SeekBar skbMaxSpeed = (SeekBar) findViewById(R.id.skbMaxSpeed);
+        setSeekBar(skbMaxSpeed, objSetting.MaxSpeed - MIN_MAX_SPEED, 100 - MIN_MAX_SPEED);
+        updateSeekBar(null);
         skbSampleRate.setOnSeekBarChangeListener(this);
         skbWindowSize.setOnSeekBarChangeListener(this);
-        updateSeekBar();
+        skbJoggingSpeed.setOnSeekBarChangeListener(this);
+        skbBikingSpeed.setOnSeekBarChangeListener(this);
+        skbMaxSpeed.setOnSeekBarChangeListener(this);
+    }
+
+    // Wrapper
+    private void setSeekBar(SeekBar skb, int intProgress, int intMax) {
+        skb.setProgress(intProgress);
+
+        if (intMax > 0) {
+            skb.setMax(intMax);
+        }
     }
 
     //region Initialise chart
@@ -292,19 +313,40 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
 
     //region Seekbars
 
-    private void updateSeekBar() {
-        TextView lblSampleRate = (TextView) findViewById(R.id.lblSampleRate);
-        SeekBar skbSampleRate = (SeekBar) findViewById(R.id.skbSampleRate);
-        lblSampleRate.setText("" + skbSampleRate.getProgress());
-        objSetting.SampleRate = skbSampleRate.getProgress();
-
-        TextView lblWindowSize = (TextView) findViewById(R.id.lblWindowSize);
-        SeekBar skbWindowSize = (SeekBar) findViewById(R.id.skbWindowSize);
-        lblWindowSize.setText("" + skbWindowSize.getProgress());
-        objSetting.FFTWindowSize = skbWindowSize.getProgress();
+    private void updateSeekBar(SeekBar seekBar) {
+        int intProgress = updateSeekBarLabel(R.id.lblSampleRate, R.id.skbSampleRate, 0);
+        objSetting.SampleRate = intProgress;
+        intProgress = updateSeekBarLabel(R.id.lblWindowSize, R.id.skbWindowSize, 0);
+        objSetting.FFTWindowSize = intProgress;
+        intProgress = updateSeekBarLabel(R.id.lblJoggingSpeed, R.id.skbJoggingSpeed, MIN_JOGGING_SPEED);
+        objSetting.JoggingSpeed = intProgress;
+        intProgress = updateSeekBarLabel(R.id.lblBikingSpeed, R.id.skbBikingSpeed, MIN_BIKING_SPEED);
+        objSetting.BikingSpeed = intProgress;
+        intProgress = updateSeekBarLabel(R.id.lblMaxSpeed, R.id.skbMaxSpeed, MIN_MAX_SPEED);
+        objSetting.MaxSpeed = intProgress;
 
         // Save setting to shared preferences to use them again at a later time
         saveSetting();
+
+        // If user changes sample rate or window size, redraw charts
+        if (seekBar != null && (seekBar.getId() == R.id.lblSampleRate || seekBar.getId() == R.id.lblWindowSize)) {
+            updateChart();
+        }
+    }
+
+    // Wrapper
+    private void checkAndSetMin(SeekBar seekBar, int intMin) {
+        if (seekBar.getProgress() < intMin) {
+            seekBar.setProgress(intMin);
+        }
+    }
+
+    private int updateSeekBarLabel(int intLabelID, int intSeekBarID, int intMin) {
+        TextView lbl = (TextView) findViewById(intLabelID);
+        SeekBar skb = (SeekBar) findViewById(intSeekBarID);
+        int intProgress = skb.getProgress() + intMin;
+        lbl.setText("" + intProgress);
+        return intProgress;
     }
 
     private void saveSetting() {
@@ -394,16 +436,19 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
         long lngNow = System.currentTimeMillis();
         long lngTimeDifference = lngNow - lngLastTime;
 
-        // Only add new point to graph if time has passed the update interval
-        if (lngTimeDifference > 1000 / objSetting.SampleRate) {
-            lngLastTime = lngNow;
+        if (objSetting.SampleRate > 0) {
+            // Only add new point to graph if time has passed the update interval
+            if (lngTimeDifference > 1000 / objSetting.SampleRate) {
+                lngLastTime = lngNow;
+                addNewEntriesToChart(event);
 
-            if (intEntryCount > 0) {
-                calculateCurrentSpeeds(lngTimeDifference);
-                checkAndPlayMusic();
+                if (intEntryCount > 0) {
+                    calculateCurrentSpeeds(lngTimeDifference);
+                    checkAndPlayMusic();
+                }
             }
-
-            addNewEntriesToChart(event);
+        } else {
+            updateFFT();
         }
     }
 
@@ -412,7 +457,7 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
         if (bolSelectedSongs) {
             double dblSpeed = dblCurrentAccelerometerSpeed;
 
-            if (dblCurrentLocationSpeed != -1) {
+            if (dblCurrentLocationSpeed != 0) {
                 dblSpeed = dblCurrentLocationSpeed;
             }
 
@@ -459,16 +504,17 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
     private void calculateCurrentSpeeds(long lngTimeDifference) {
         // calculate current speed using last acceleration on each axis and time passed, then apply formula v = sqrt(vx^2 + vy^2 + vz^2)
         double dblSecond = lngTimeDifference / 1000.1;
-        dblCurrentXSpeed += lstX.get(lstX.size() - 1).getY() * dblSecond * 60 * 60 / 1000;
-        dblCurrentYSpeed += lstX.get(lstX.size() - 1).getY() * dblSecond * 60 * 60 / 1000;
-        dblCurrentZSpeed += lstX.get(lstX.size() - 1).getY() * dblSecond * 60 * 60 / 1000;
+        dblCurrentXSpeed += lstX.get(lstX.size() - 1).getY() * dblSecond * 3.6;
+        dblCurrentYSpeed += lstX.get(lstX.size() - 1).getY() * dblSecond * 3.6;
+        dblCurrentZSpeed += lstX.get(lstX.size() - 1).getY() * dblSecond * 3.6;
         dblCurrentAccelerometerSpeed = Math.sqrt(
                 Math.pow(dblCurrentXSpeed, 2)
                         + Math.pow(dblCurrentYSpeed, 2)
                         + Math.pow(dblCurrentZSpeed, 2));
         TextView lblCurrentSpeed = (TextView) findViewById(R.id.lblCurrentSpeed);
         DecimalFormat decimalFormat = new DecimalFormat("#,##0.000");
-        lblCurrentSpeed.setText("Calculated speed: " + decimalFormat.format(dblCurrentAccelerometerSpeed) + " km/h\r\nLocation speed: " + dblCurrentLocationSpeed);
+        lblCurrentSpeed.setText("Calculated speed: " + decimalFormat.format(dblCurrentAccelerometerSpeed) + " km/h\r\n" +
+                "Location speed: " + decimalFormat.format(dblCurrentLocationSpeed));
     }
 
     private void addNewEntriesToChart(SensorEvent event) {
@@ -478,7 +524,7 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
         addDataToList(lstX, x);
         float y = event.values[1];
         addDataToList(lstY, y);
-        float z = event.values[2];
+        float z = event.values[2] - 9.80991f;
         addDataToList(lstZ, z);
         float magnitude = (float) Math.sqrt(Math.pow(x, 2) + Math.pow(y, 2) + Math.pow(z, 2));
         addDataToList(lstMagnitude, magnitude);
@@ -570,7 +616,7 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
         setContentView(R.layout.activity_main);
 
         try {
-            initialise();
+            initialisePermissions();
         } catch (Exception ex) {
             Log.e("onCreate", "Exception", ex);
         }
@@ -581,7 +627,7 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
         try {
             Sensor objSensor = event.sensor;
 
-            if (objSensor.getType() == Sensor.TYPE_LINEAR_ACCELERATION) {
+            if (objSensor.getType() == Sensor.TYPE_ACCELEROMETER) {
                 sensorChanged(event);
             }
         } catch (Exception ex) {
@@ -608,7 +654,7 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
     @Override
     public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
         try {
-            updateSeekBar();
+            updateSeekBar(seekBar);
         } catch (Exception ex) {
             Log.e("onProgressChanged", "Exception", ex);
         }
@@ -657,9 +703,9 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
     @Override
     public void onLocationChanged(Location location) {
         if (location.hasSpeed()) {
-            dblCurrentLocationSpeed = location.getSpeed();
+            dblCurrentLocationSpeed = location.getSpeed() * 3.6;
         } else {
-            dblCurrentLocationSpeed = -1;
+            dblCurrentLocationSpeed = 0;
         }
     }
 
@@ -676,6 +722,26 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
     @Override
     public void onProviderDisabled(String provider) {
 
+    }
+
+    public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults) {
+        try {
+            boolean bolGrantedAll = true;
+
+            for (int i : grantResults) {
+                if (i == PackageManager.PERMISSION_DENIED) {
+                    showToast("Please grant the app all the required permissions!");
+                    bolGrantedAll = false;
+                    break;
+                }
+            }
+
+            if (bolGrantedAll) {
+                initialise();
+            }
+        } catch (Exception ex) {
+            Log.e("onRequestPermissions", "Exception", ex);
+        }
     }
 
     //endregion
