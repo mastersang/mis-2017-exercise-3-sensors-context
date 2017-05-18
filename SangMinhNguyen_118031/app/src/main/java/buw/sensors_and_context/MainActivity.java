@@ -71,7 +71,7 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
     private double dblCurrentYSpeed = 0;
     private double dblCurrentZSpeed = 0;
     private double dblCurrentAccelerometerSpeed = 0;
-    private double dblCurrentLocationSpeed = 0;
+    private double dblCurrentLocationSpeed = -1;
     private List<Entry> lstX = new ArrayList<>();
     private List<Entry> lstY = new ArrayList<>();
     private List<Entry> lstZ = new ArrayList<>();
@@ -457,7 +457,7 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
         if (bolSelectedSongs) {
             double dblSpeed = dblCurrentAccelerometerSpeed;
 
-            if (dblCurrentLocationSpeed != 0) {
+            if (dblCurrentLocationSpeed != -1) {
                 dblSpeed = dblCurrentLocationSpeed;
             }
 
@@ -522,8 +522,14 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
                         + Math.pow(dblCurrentZSpeed, 2));
         TextView lblCurrentSpeed = (TextView) findViewById(R.id.lblCurrentSpeed);
         DecimalFormat decimalFormat = new DecimalFormat("#,##0.000");
+        double dblLocationSpeed = dblCurrentLocationSpeed;
+
+        if (dblLocationSpeed == -1) {
+            dblLocationSpeed = 0;
+        }
+
         lblCurrentSpeed.setText("Calculated speed: " + decimalFormat.format(dblCurrentAccelerometerSpeed) + " km/h\r\n" +
-                "Location speed: " + decimalFormat.format(dblCurrentLocationSpeed) + " km/h");
+                "Location speed: " + decimalFormat.format(dblLocationSpeed) + " km/h");
     }
 
     private void addNewEntriesToChart(SensorEvent event) {
@@ -714,7 +720,7 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
         if (location.hasSpeed()) {
             dblCurrentLocationSpeed = location.getSpeed() * 3.6;
         } else {
-            dblCurrentLocationSpeed = 0;
+            dblCurrentLocationSpeed = -1;
         }
     }
 
